@@ -8,102 +8,68 @@ No cloud account. No paid API. No mandatory AI model. Works offline.
 
 [![CI](https://github.com/sayan9168/sayanox-proofmesh/actions/workflows/ci.yml/badge.svg)](https://github.com/sayan9168/sayanox-proofmesh/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.2.0-green.svg)](CHANGELOG.md)
 
 ## Why ProofMesh?
 
-Most tools either:
-
-- Scan and dump findings (then the scan result is ephemeral), or
-- Produce provenance/attestations focused on *builds*, not on *what was verified for a change*.
-
-ProofMesh focuses on **evidence of verification** for a specific repository state:
-
-- What commit / working tree was inspected
-- Which checks ran (and which were skipped or errored)
-- What findings were produced (secrets redacted)
-- Integrity hash of the evidence bundle
-- Optional cryptographic signature of who produced it
+Most tools either scan and dump findings (ephemeral), or produce build provenance. ProofMesh focuses on **evidence of verification** for a specific repository state.
 
 ## Quick start
 
 ```bash
-# Requires Python 3.12+
 pip install -e ".[dev]"
-
-# Initialize config
 proofmesh init
-
-# Inspect repository
 proofmesh inspect
-
-# Run verification
 proofmesh verify
-
-# Verify evidence integrity later
+proofmesh verify --policy strict
+proofmesh verify --with-osv
+proofmesh verify --suppressions examples/suppressions.example.json
+proofmesh verify --sarif out.sarif --markdown report.md
 proofmesh evidence verify .proofmesh/evidence/<run-id>.evidence.json
+proofmesh schema validate .proofmesh/evidence/<run-id>.evidence.json
+proofmesh export .proofmesh/evidence/<run-id>.evidence.json -o bundle.zip
+proofmesh compare evidence-a.json evidence-b.json
 ```
 
-## CLI
+## CLI (0.2)
 
 | Command | Description |
 |---------|-------------|
-| `proofmesh init` | Write default `proofmesh.json` and `.proofmesh/` |
-| `proofmesh inspect` | Show Git state and changed files |
-| `proofmesh verify` | Run checks, write evidence, print summary |
-| `proofmesh report <evidence.json>` | Re-print summary / write Markdown |
-| `proofmesh evidence verify <file>` | Check content-hash integrity (and optional signature) |
-| `proofmesh rules --list` | List built-in secret / risky-code rules |
-| `proofmesh keygen` | Generate Ed25519 key pair for signing |
-| `proofmesh version` | Print version |
+| `proofmesh init` | Write default config |
+| `proofmesh inspect` | Git state and changes |
+| `proofmesh verify` | Run checks + evidence |
+| `proofmesh report` | Markdown / terminal |
+| `proofmesh evidence verify` | Integrity (+ optional signature) |
+| `proofmesh schema validate` | JSON Schema check |
+| `proofmesh sarif` | SARIF 2.1 export |
+| `proofmesh export` | Zip evidence package |
+| `proofmesh compare` | Diff two evidence runs |
+| `proofmesh policy --list` | Severity profiles |
+| `proofmesh rules --list` | Built-in rules |
+| `proofmesh keygen` | Ed25519 keys |
+| `proofmesh version` | Version |
+
+### verify flags
+
+`--only` · `--with-osv` · `--with-gitleaks` · `--with-semgrep` · `--suppressions` · `--policy` (strict\|standard\|relaxed\|critical-only) · `--sarif` · `--sign-key`
 
 Exit codes: `0` passed · `1` failed · `2` errored · `3` other.
 
-## Built-in checks (v0.1)
-
-| Check ID | What it does |
-|----------|----------------|
-| `file_inventory` | Records change set and repository identity |
-| `secrets` | Pattern-based secret detection with **mandatory redaction** |
-| `risky_code` | Heuristic risky patterns (`eval`, `shell=True`, …) |
-| `dependency_inventory` | Best-effort inventory from common manifests |
-
-Vulnerability *lookup* is intentionally limited in this release — see [docs/limitations.md](docs/limitations.md).
-
-## Evidence
-
-Evidence is a versioned JSON document (`schemas/evidence-v1.schema.json`) containing:
-
-- Run ID, timestamps (UTC), tool version
-- Repository identity and change inventory
-- Per-check status, findings, durations, limitations
-- SHA-256 content hash over a canonical encoding
-- Optional Ed25519 signature metadata
-
-A hash is **not** a digital signature. Sign with `proofmesh keygen` + `proofmesh verify --sign-key …` when you need authenticity.
-
-## Architecture (short)
-
-```
-Repository Inspector → Verification Orchestrator → Evidence Engine → Reports / SQLite history
-         ↑                        ↑
-    git status / hash      secrets · risky · inventory
-```
-
-See [docs/architecture.md](docs/architecture.md) and [docs/threat-model.md](docs/threat-model.md).
-
-## Development
+## Companion PWA
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-ruff check src tests
-pytest -q
+cd web/companion && python -m http.server 8080
+# Import A / optional B to compare offline
 ```
+
+## Checks
+
+`file_inventory` · `secrets` · `risky_code` · `dependency_inventory` (manifests + lockfiles) · opt-in `osv` / `gitleaks` / `semgrep`
+
+## Docs
+
+[architecture](docs/architecture.md) · [threat model](docs/threat-model.md) · [limitations](docs/limitations.md) · [roadmap](docs/roadmap.md)
 
 ## License
 
-Apache-2.0 — see [LICENSE](LICENSE).
-
-## Status
-
-**Alpha (0.1.0).** Core local CLI, evidence, integrity, and tests are implemented. Companion PWA, full OSV integration, and team features are on the roadmap. Do not treat this as production-hardened without review of [docs/limitations.md](docs/limitations.md).
+Apache-2.0
