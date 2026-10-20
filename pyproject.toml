@@ -33,6 +33,9 @@ proofmesh = "proofmesh.cli:app"
 Homepage = "https://github.com/sayan9168/sayanox-proofmesh"
 Repository = "https://github.com/sayan9168/sayanox-proofmesh"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/proofmesh"]
+
 [tool.hatch.build.targets.sdist]
 include = [
     "/src",
