@@ -10,6 +10,8 @@ import typer
 from rich.console import Console
 
 from proofmesh import __version__
+from proofmesh.checks.base import CheckStatus
+from proofmesh.checks.osv import OSVCheck
 from proofmesh.config import load_config, write_default_config
 from proofmesh.evidence import (
     build_evidence,
@@ -19,10 +21,13 @@ from proofmesh.evidence import (
 )
 from proofmesh.gitdiff import inspect_repository
 from proofmesh.integrity import generate_keypair, save_keypair, sign_evidence, verify_signature
-from proofmesh.orchestrator import Orchestrator
+from proofmesh.orchestrator import CORE_CHECK_IDS, Orchestrator
 from proofmesh.reports import print_terminal_summary, write_markdown_report
 from proofmesh.rules import list_builtin_rules
+from proofmesh.sarif import evidence_to_sarif
+from proofmesh.schema_validate import validate_evidence
 from proofmesh.storage import Storage
+from proofmesh.suppressions import SuppressionSet
 
 app = typer.Typer(
     name="proofmesh",
@@ -100,17 +105,58 @@ def inspect(
 def verify(
     path: Path = typer.Option(Path("."), "--path", "-p", help="Repository path"),
     only: Optional[str] = typer.Option(None, "--only", help="Comma-separated check IDs"),
+    with_osv: bool = typer.Option(False, "--with-osv", help="Enable OSV vulnerability lookup (network)"),
+    with_gitleaks: bool = typer.Option(False, "--with-gitleaks", help="Run gitleaks if installed"),
+    with_semgrep: bool = typer.Option(False, "--with-semgrep", help="Run semgrep if installed"),
+    suppressions_file: Optional[Path] = typer.Option(None, "--suppressions", help="JSON suppressions with justification"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="Evidence JSON path"),
     markdown: Optional[Path] = typer.Option(None, "--markdown", "-m", help="Markdown report path"),
+    sarif_out: Optional[Path] = typer.Option(None, "--sarif", help="Write SARIF 2.1 report"),
     sign_key: Optional[Path] = typer.Option(None, "--sign-key", help="Ed25519 private key PEM to sign"),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress terminal summary"),
 ) -> None:
     """Run verification checks and produce evidence."""
     config = load_config()
     orch = Orchestrator(config)
-    only_list = [x.strip() for x in only.split(",")] if only else None
+
+    if only:
+        only_list = [x.strip() for x in only.split(",") if x.strip()]
+    else:
+        only_list = list(CORE_CHECK_IDS)
+        if with_osv:
+            only_list.append("osv")
+            orch.register("osv", lambda s: OSVCheck(enabled=True).run(s))
+        if with_gitleaks:
+            only_list.append("gitleaks")
+        if with_semgrep:
+            only_list.append("semgrep")
+
     state, results = orch.run(path=path, only=only_list)
+
+    suppressed_audit: list[dict] = []
+    if suppressions_file:
+        try:
+            sset = SuppressionSet.load(suppressions_file)
+        except (ValueError, json.JSONDecodeError, OSError) as exc:
+            console.print(f"[red]Invalid suppressions file:[/red] {exc}")
+            raise typer.Exit(2)
+        for r in results:
+            if not r.findings:
+                continue
+            active, audit = sset.filter_findings(r.findings)
+            r.findings = active
+            suppressed_audit.extend(audit)
+            if not active and r.status == CheckStatus.FAILED:
+                r.status = CheckStatus.PASSED
+                r.message = (r.message or "") + f" ({len(audit)} suppressed)"
+                r.exit_code = 0
+
     evidence = build_evidence(state, results)
+    if suppressed_audit:
+        evidence.setdefault("limitations", []).append(
+            f"{len(suppressed_audit)} finding(s) suppressed with recorded justification."
+        )
+        evidence["suppressed_findings"] = suppressed_audit
 
     if sign_key:
         if not sign_key.is_file():
@@ -141,6 +187,12 @@ def verify(
 
     if markdown:
         write_markdown_report(evidence, markdown)
+    if sarif_out:
+        sarif_doc = evidence_to_sarif(evidence)
+        sarif_out.parent.mkdir(parents=True, exist_ok=True)
+        sarif_out.write_text(json.dumps(sarif_doc, indent=2) + "\n", encoding="utf-8")
+        if not quiet:
+            console.print(f"SARIF written: {sarif_out}")
 
     if not quiet:
         print_terminal_summary(evidence, console=console)
@@ -153,7 +205,7 @@ def verify(
 def evidence_cmd(
     action: str = typer.Argument(..., help="verify | show"),
     path: Path = typer.Argument(..., help="Path to evidence JSON"),
-    public_key: Optional[Path] = typer.Option(None, "--public-key", help="Ed25519 public key"),
+    public_key: Optional[Path] = typer.Option(None, "--public-key", help="Ed25519 public key for signature check"),
 ) -> None:
     """Inspect or verify an evidence bundle."""
     if not path.is_file():
@@ -187,7 +239,7 @@ def evidence_cmd(
                 console.print(f"[red]Signature FAILED:[/red] {smsg}")
                 raise typer.Exit(1)
         elif evidence.get("integrity", {}).get("signed"):
-            console.print("[yellow]Evidence is signed but no --public-key provided.[/yellow]")
+            console.print("[yellow]Evidence is signed but no --public-key provided; signature not verified.[/yellow]")
         return
 
     console.print(f"[red]Unknown action:[/red] {action} (use verify or show)")
@@ -228,6 +280,51 @@ def keygen(
     save_keypair(priv, pub, out_dir)
     console.print(f"[green]Key pair written to[/green] {out_dir}")
     console.print("  Protect the private key (mode 600). Never commit it.")
+
+
+@app.command("schema")
+def schema_cmd(
+    action: str = typer.Argument("validate", help="validate"),
+    evidence_path: Path = typer.Argument(..., help="Evidence JSON path"),
+    schema_path: Optional[Path] = typer.Option(None, "--schema", help="Override schema path"),
+) -> None:
+    """Validate an evidence file against the JSON Schema."""
+    if action != "validate":
+        console.print(f"[red]Unknown action:[/red] {action}")
+        raise typer.Exit(2)
+    try:
+        evidence = load_evidence(evidence_path)
+    except (json.JSONDecodeError, ValueError, OSError) as exc:
+        console.print(f"[red]Cannot load evidence:[/red] {exc}")
+        raise typer.Exit(2)
+    from proofmesh.schema_validate import load_schema
+
+    try:
+        schema = load_schema(schema_path) if schema_path else load_schema()
+    except FileNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2)
+    ok, errors = validate_evidence(evidence, schema)
+    if ok:
+        console.print("[green]Schema validation OK[/green]")
+        raise typer.Exit(0)
+    console.print(f"[red]Schema validation failed ({len(errors)} error(s))[/red]")
+    for e in errors[:30]:
+        console.print(f"  • {e}")
+    raise typer.Exit(1)
+
+
+@app.command("sarif")
+def sarif_cmd(
+    evidence_path: Path = typer.Argument(..., help="Evidence JSON path"),
+    output: Path = typer.Option(Path("proofmesh.sarif"), "--output", "-o"),
+) -> None:
+    """Export evidence findings to SARIF 2.1.0."""
+    evidence = load_evidence(evidence_path)
+    doc = evidence_to_sarif(evidence)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
+    console.print(f"SARIF written: {output} ({len(doc['runs'][0]['results'])} result(s))")
 
 
 if __name__ == "__main__":
