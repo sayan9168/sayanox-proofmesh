@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sayan9168/sayanox-proofmesh/schemas/evidence-v1.schema.json",
+  "title": "ProofMesh Evidence v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "created_at",
+    "tool",
+    "repository",
+    "summary",
+    "checks",
+    "integrity"
+  ],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "schema_id": { "type": "string" },
+    "run_id": { "type": "string", "format": "uuid" },
+    "created_at": { "type": "string" },
+    "tool": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "repository": {
+      "type": "object",
+      "required": ["root", "is_git"],
+      "properties": {
+        "root": { "type": "string" },
+        "is_git": { "type": "boolean" },
+        "head_commit": { "type": ["string", "null"] },
+        "branch": { "type": ["string", "null"] },
+        "is_dirty": { "type": "boolean" },
+        "changes": { "type": "array" },
+        "inventory_incomplete": { "type": "boolean" },
+        "inventory_errors": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["overall_status", "check_counts", "finding_count"],
+      "properties": {
+        "overall_status": {
+          "type": "string",
+          "enum": ["passed", "failed", "errored", "skipped"]
+        },
+        "check_counts": { "type": "object" },
+        "finding_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["check_id", "status"],
+        "properties": {
+          "check_id": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["passed", "failed", "skipped", "errored"]
+          },
+          "findings": { "type": "array" },
+          "duration_ms": { "type": "number" },
+          "message": { "type": "string" },
+          "limitations": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "artifacts": { "type": "array" },
+    "integrity": {
+      "type": "object",
+      "required": ["algorithm", "content_hash"],
+      "properties": {
+        "algorithm": { "type": "string" },
+        "content_hash": { "type": "string", "minLength": 64, "maxLength": 64 },
+        "signed": { "type": "boolean" },
+        "signature": { "type": ["string", "null"] },
+        "public_key_hint": { "type": ["string", "null"] },
+        "note": { "type": "string" }
+      }
+    }
+  },
+  "additionalProperties": true
+}
