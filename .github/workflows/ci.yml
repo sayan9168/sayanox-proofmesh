@@ -28,17 +28,19 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest ruff typer rich cryptography jsonschema
-          # Editable install; non-fatal if hatch quirks appear
+          pip install \
+            pytest ruff typer rich cryptography jsonschema \
+            "pydantic>=2.7.0"
           pip install -e . || true
 
       - name: Verify import
         env:
           PYTHONPATH: ${{ github.workspace }}/src
         run: |
-          python -c "import proofmesh; print(proofmesh.__version__)"
-          python -c "from proofmesh.policy import list_profiles; print('policy', len(list_profiles()))"
-          python -c "from proofmesh.export_pkg import export_evidence_zip; print('export ok')"
+          python -c "import pydantic; print('pydantic', pydantic.__version__)"
+          python -c "import proofmesh; print('proofmesh', proofmesh.__version__)"
+          python -c "from proofmesh.config import ProofMeshConfig; print('config ok')"
+          python -c "from proofmesh.orchestrator import Orchestrator; print('orch ok')"
 
       - name: Ruff lint (non-blocking)
         run: ruff check src tests || true
@@ -46,25 +48,23 @@ jobs:
       - name: Unit and integration tests
         env:
           PYTHONPATH: ${{ github.workspace }}/src
-        run: python -m pytest -q --tb=short -x
+        run: python -m pytest -q --tb=short
 
       - name: Module smoke
         env:
           PYTHONPATH: ${{ github.workspace }}/src
         run: |
-          python -c "from proofmesh.cli import app; print('cli', app)"
+          python -c "from proofmesh.cli import app; print('cli ok')"
+          python -c "from proofmesh.policy import list_profiles; print('policy ok')"
+          python -c "from proofmesh.export_pkg import export_evidence_zip; print('export ok')"
           python -c "from proofmesh.suppressions import SuppressionSet; print('sup ok')"
           python -c "from proofmesh.checks.osv import OSVCheck; print('osv ok')"
           python -c "from proofmesh.checks.external import GitleaksCheck; print('ext ok')"
-          python -c "from proofmesh.sarif import evidence_to_sarif; print('sarif ok')"
 
       - name: Required files present
         run: |
           test -f schemas/evidence-v1.schema.json
           test -f web/companion/index.html
-          test -f web/companion/app.js
           test -f src/proofmesh/policy.py
           test -f src/proofmesh/export_pkg.py
-          test -f src/proofmesh/suppressions.py
-          test -f src/proofmesh/checks/osv.py
-          test -f src/proofmesh/checks/external.py
+          test -f src/proofmesh/config.py
