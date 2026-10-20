@@ -25,35 +25,40 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install package
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest ruff typer rich cryptography
-          pip install -e ".[dev]" || pip install -e . || true
-          python -c "import proofmesh; print('proofmesh', proofmesh.__version__)" || \
-            PYTHONPATH=src python -c "import proofmesh; print('proofmesh', proofmesh.__version__)"
+          pip install pytest ruff typer rich cryptography jsonschema
+          # Editable install; non-fatal if hatch quirks appear
+          pip install -e . || true
+
+      - name: Verify import
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: |
+          python -c "import proofmesh; print(proofmesh.__version__)"
+          python -c "from proofmesh.policy import list_profiles; print('policy', len(list_profiles()))"
+          python -c "from proofmesh.export_pkg import export_evidence_zip; print('export ok')"
 
       - name: Ruff lint (non-blocking)
         run: ruff check src tests || true
 
       - name: Unit and integration tests
         env:
-          PYTHONPATH: src
-        run: python -m pytest -q --tb=short
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: python -m pytest -q --tb=short -x
 
-      - name: CLI smoke
+      - name: Module smoke
         env:
-          PYTHONPATH: src
+          PYTHONPATH: ${{ github.workspace }}/src
         run: |
-          python -c "from proofmesh import __version__; print(__version__)"
-          python -c "from proofmesh.cli import app; print('cli ok')"
-          python -c "from proofmesh.policy import list_profiles; print(list_profiles()[0]['id'])"
-          python -c "from proofmesh.export_pkg import export_evidence_zip; print('export ok')"
+          python -c "from proofmesh.cli import app; print('cli', app)"
           python -c "from proofmesh.suppressions import SuppressionSet; print('sup ok')"
           python -c "from proofmesh.checks.osv import OSVCheck; print('osv ok')"
           python -c "from proofmesh.checks.external import GitleaksCheck; print('ext ok')"
+          python -c "from proofmesh.sarif import evidence_to_sarif; print('sarif ok')"
 
-      - name: Schema and companion presence
+      - name: Required files present
         run: |
           test -f schemas/evidence-v1.schema.json
           test -f web/companion/index.html
