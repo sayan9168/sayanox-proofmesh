@@ -12,17 +12,18 @@
 
 ## 0.2
 
-- [ ] JSON Schema validation CLI command
-- [ ] Suppression rules with justification metadata
-- [ ] Optional integration wrappers for Gitleaks / OSV-Scanner (record external tool evidence)
+- [x] JSON Schema validation CLI command
+- [x] Suppression rules with justification metadata
+- [x] Optional integration wrappers for Gitleaks / Semgrep / OSV API
 - [ ] Improved dependency inventory (TOML, lockfiles)
 - [ ] Evidence import/export package (zip with artifacts)
 
 ## 0.3
 
-- [ ] Companion PWA (read-only evidence browser, compare runs)
+- [x] Companion PWA (read-only evidence browser)
+- [ ] Compare two evidence runs in UI
 - [ ] Severity policy profiles
-- [ ] SARIF export for findings
+- [x] SARIF export for findings
 
 ## Later
 

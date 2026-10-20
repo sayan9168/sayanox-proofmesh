@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1220" />
+  <meta name="description" content="ProofMesh Companion — browse verification evidence offline" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <title>ProofMesh Companion</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">◈</span>
+      <div>
+        <h1>ProofMesh Companion</h1>
+        <p class="tag">Don't just ship code. Prove what was verified.</p>
+      </div>
+    </div>
+    <div class="actions">
+      <label class="btn primary">
+        Import evidence
+        <input type="file" id="fileInput" accept="application/json,.json" hidden />
+      </label>
+      <button type="button" class="btn" id="clearBtn" disabled>Clear</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="empty" class="card empty">
+      <h2>No evidence loaded</h2>
+      <p>Import a <code>*.evidence.json</code> file from <code>proofmesh verify</code>. Everything stays in your browser — no server, no upload.</p>
+      <ul>
+        <li>Pass / fail / skipped / errored checks</li>
+        <li>Findings with severity filter</li>
+        <li>Integrity hash status (client-side note)</li>
+        <li>Limitations and suppressed findings</li>
+      </ul>
+    </section>
+
+    <section id="dashboard" class="hidden">
+      <div class="grid summary-grid">
+        <article class="card status-card" id="statusCard">
+          <h2>Overall</h2>
+          <p class="big" id="overallStatus">—</p>
+          <p class="muted" id="runMeta"></p>
+        </article>
+        <article class="card">
+          <h2>Repository</h2>
+          <dl class="kv" id="repoMeta"></dl>
+        </article>
+        <article class="card">
+          <h2>Integrity</h2>
+          <dl class="kv" id="integrityMeta"></dl>
+        </article>
+      </div>
+
+      <article class="card">
+        <div class="row between">
+          <h2>Checks</h2>
+          <span class="muted" id="checkCounts"></span>
+        </div>
+        <div class="table-wrap">
+          <table id="checksTable">
+            <thead>
+              <tr>
+                <th>Check</th>
+                <th>Status</th>
+                <th>Findings</th>
+                <th>Duration</th>
+                <th>Message</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="row between wrap">
+          <h2>Findings</h2>
+          <div class="filters">
+            <label>Severity
+              <select id="sevFilter">
+                <option value="all">All</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </label>
+            <label>Rule contains
+              <input type="search" id="ruleFilter" placeholder="e.g. secret." />
+            </label>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="findingsTable">
+            <thead>
+              <tr>
+                <th>Severity</th>
+                <th>Rule</th>
+                <th>Location</th>
+                <th>Message</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="muted" id="findingsEmpty"></p>
+      </article>
+
+      <article class="card" id="suppressedCard">
+        <h2>Suppressed findings</h2>
+        <div class="table-wrap">
+          <table id="suppressedTable">
+            <thead>
+              <tr>
+                <th>Rule</th>
+                <th>Path</th>
+                <th>Justification</th>
+                <th>By</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>Limitations</h2>
+        <ul id="limitationsList"></ul>
+      </article>
+    </section>
+  </main>
+
+  <footer>
+    <p>Local-first · Read-only · No shell execution from this page</p>
+  </footer>
+
+  <script src="app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    }
+  </script>
+</body>
+</html>

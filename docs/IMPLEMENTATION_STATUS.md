@@ -11,25 +11,21 @@
 - SQLite run history
 - Terminal + Markdown reports
 - JSON Schema for evidence v1
-- Unit tests (gitdiff, rules, evidence, signatures)
-- Integration tests (verify flow on dirty/clean repos)
+- Unit and integration tests
 - GitHub Actions CI workflow
-- Documentation set required by the master prompt
+- Core documentation
 
-## Not implemented yet (explicitly out of 0.1 scope)
+## Added in 0.2 slice (2026-10-20)
 
-- Companion PWA UI
-- Full OSV vulnerability lookup
-- External tool wrappers (Gitleaks, Semgrep) as first-class checks
-- Suppression rule engine with audit trail
+- Companion PWA (`web/companion/`) — offline evidence browser
+- OSV API check (`--with-osv`, network, best-effort)
+- External wrappers: Gitleaks / Semgrep (skip if not installed)
+- Suppression rules with mandatory justification + audit trail
+- `proofmesh schema validate` JSON Schema command
+- SARIF 2.1 export (`proofmesh sarif` / `verify --sarif`)
+
+## Still later
+
 - Multi-platform packaging installers
-
-## Commands run during development
-
-See CI and local `pytest` / `ruff` invocations recorded in the session.
-
-## Next concrete actions
-
-1. Expand dependency parsers
-2. Add schema validation command
-3. Begin read-only companion UI for evidence bundles
+- Team edition / shared policy server
+- Authenticated remote agent
