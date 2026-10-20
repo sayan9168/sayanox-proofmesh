@@ -6,7 +6,9 @@ import time
 from typing import Callable
 
 from proofmesh.checks.base import CheckResult, CheckStatus, now_iso
+from proofmesh.checks.external import GitleaksCheck, SemgrepCheck
 from proofmesh.checks.inventory import DependencyInventoryCheck, FileInventoryCheck
+from proofmesh.checks.osv import OSVCheck
 from proofmesh.checks.risky import RiskyCodeCheck
 from proofmesh.checks.secrets import SecretsCheck
 from proofmesh.config import ProofMeshConfig
@@ -21,7 +23,17 @@ DEFAULT_CHECKS: dict[str, CheckRunner] = {
     "secrets": lambda s: SecretsCheck().run(s),
     "risky_code": lambda s: RiskyCodeCheck().run(s),
     "dependency_inventory": lambda s: DependencyInventoryCheck().run(s),
+    "osv": lambda s: OSVCheck(enabled=False).run(s),
+    "gitleaks": lambda s: GitleaksCheck().run(s),
+    "semgrep": lambda s: SemgrepCheck().run(s),
 }
+
+CORE_CHECK_IDS = (
+    "file_inventory",
+    "secrets",
+    "risky_code",
+    "dependency_inventory",
+)
 
 
 class Orchestrator:
@@ -44,7 +56,7 @@ class Orchestrator:
         if state is None:
             state = inspect_repository(path)
 
-        selected = only or list(self._runners.keys())
+        selected = only or list(CORE_CHECK_IDS)
         results: list[CheckResult] = []
 
         for check_id in selected:
