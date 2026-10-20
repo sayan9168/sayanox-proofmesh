@@ -19,9 +19,11 @@ from proofmesh.evidence import (
     verify_evidence_integrity,
     write_evidence,
 )
+from proofmesh.export_pkg import export_evidence_zip
 from proofmesh.gitdiff import inspect_repository
 from proofmesh.integrity import generate_keypair, save_keypair, sign_evidence, verify_signature
 from proofmesh.orchestrator import CORE_CHECK_IDS, Orchestrator
+from proofmesh.policy import apply_policy, get_profile, list_profiles
 from proofmesh.reports import print_terminal_summary, write_markdown_report
 from proofmesh.rules import list_builtin_rules
 from proofmesh.sarif import evidence_to_sarif
@@ -108,7 +110,14 @@ def verify(
     with_osv: bool = typer.Option(False, "--with-osv", help="Enable OSV vulnerability lookup (network)"),
     with_gitleaks: bool = typer.Option(False, "--with-gitleaks", help="Run gitleaks if installed"),
     with_semgrep: bool = typer.Option(False, "--with-semgrep", help="Run semgrep if installed"),
-    suppressions_file: Optional[Path] = typer.Option(None, "--suppressions", help="JSON suppressions with justification"),
+    suppressions_file: Optional[Path] = typer.Option(
+        None, "--suppressions", help="JSON suppressions with justification"
+    ),
+    policy: str = typer.Option(
+        "standard",
+        "--policy",
+        help="Severity gate: strict | standard | relaxed | critical-only",
+    ),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="Evidence JSON path"),
     markdown: Optional[Path] = typer.Option(None, "--markdown", "-m", help="Markdown report path"),
     sarif_out: Optional[Path] = typer.Option(None, "--sarif", help="Write SARIF 2.1 report"),
@@ -157,6 +166,28 @@ def verify(
             f"{len(suppressed_audit)} finding(s) suppressed with recorded justification."
         )
         evidence["suppressed_findings"] = suppressed_audit
+
+    try:
+        profile = get_profile(policy)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2)
+    all_findings = []
+    for r in results:
+        all_findings.extend(r.findings or [])
+    gate_status, blocking, informational = apply_policy(all_findings, profile)
+    evidence["policy"] = {
+        "profile": profile.id,
+        "description": profile.description,
+        "gate_status": gate_status,
+        "blocking_count": len(blocking),
+        "informational_count": len(informational),
+    }
+    if gate_status == "failed" and evidence["summary"]["overall_status"] == "passed":
+        evidence["summary"]["overall_status"] = "failed"
+    elif gate_status == "passed" and evidence["summary"]["overall_status"] == "failed":
+        if not blocking and evidence["summary"].get("check_counts", {}).get("errored", 0) == 0:
+            evidence["summary"]["overall_status"] = "passed"
 
     if sign_key:
         if not sign_key.is_file():
@@ -325,6 +356,86 @@ def sarif_cmd(
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
     console.print(f"SARIF written: {output} ({len(doc['runs'][0]['results'])} result(s))")
+
+
+@app.command("export")
+def export_cmd(
+    evidence_path: Path = typer.Argument(..., help="Evidence JSON path"),
+    output: Path = typer.Option(Path("proofmesh-export.zip"), "--output", "-o"),
+    markdown: Optional[Path] = typer.Option(None, "--markdown", "-m"),
+    sarif: Optional[Path] = typer.Option(None, "--sarif"),
+) -> None:
+    """Package evidence (+ optional reports) into a zip archive."""
+    try:
+        path = export_evidence_zip(
+            evidence_path,
+            output,
+            include_markdown=markdown,
+            include_sarif=sarif,
+        )
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        console.print(f"[red]Export failed:[/red] {exc}")
+        raise typer.Exit(2)
+    console.print(f"[green]Export written:[/green] {path}")
+
+
+@app.command("policy")
+def policy_cmd(
+    list_only: bool = typer.Option(True, "--list", help="List policy profiles"),
+) -> None:
+    """List severity policy profiles used by `verify --policy`."""
+    for p in list_profiles():
+        console.print(f"[bold]{p['id']}[/bold]  fail_on={','.join(p['fail_on'])}")
+        console.print(f"  {p['description']}")
+
+
+@app.command("compare")
+def compare_cmd(
+    a: Path = typer.Argument(..., help="First evidence JSON"),
+    b: Path = typer.Argument(..., help="Second evidence JSON"),
+    json_out: bool = typer.Option(False, "--json", help="Emit JSON diff summary"),
+) -> None:
+    """Compare two evidence runs (status, finding counts, rule IDs)."""
+    ea = load_evidence(a)
+    eb = load_evidence(b)
+
+    def finding_keys(ev: dict) -> set[str]:
+        keys: set[str] = set()
+        for c in ev.get("checks") or []:
+            for f in c.get("findings") or []:
+                keys.add(f"{f.get('rule_id','')}|{f.get('path','')}|{f.get('line','')}")
+        return keys
+
+    ka, kb = finding_keys(ea), finding_keys(eb)
+    only_a = sorted(ka - kb)
+    only_b = sorted(kb - ka)
+    summary = {
+        "a": {
+            "run_id": ea.get("run_id"),
+            "overall": (ea.get("summary") or {}).get("overall_status"),
+            "findings": (ea.get("summary") or {}).get("finding_count"),
+        },
+        "b": {
+            "run_id": eb.get("run_id"),
+            "overall": (eb.get("summary") or {}).get("overall_status"),
+            "findings": (eb.get("summary") or {}).get("finding_count"),
+        },
+        "only_in_a": only_a[:100],
+        "only_in_b": only_b[:100],
+        "shared": len(ka & kb),
+    }
+    if json_out:
+        print(json.dumps(summary, indent=2))
+        return
+    console.print(f"A: {summary['a']['run_id']}  status={summary['a']['overall']}  findings={summary['a']['findings']}")
+    console.print(f"B: {summary['b']['run_id']}  status={summary['b']['overall']}  findings={summary['b']['findings']}")
+    console.print(f"Shared finding keys: {summary['shared']}")
+    console.print(f"Only in A: {len(only_a)}")
+    for x in only_a[:15]:
+        console.print(f"  - {x}")
+    console.print(f"Only in B: {len(only_b)}")
+    for x in only_b[:15]:
+        console.print(f"  - {x}")
 
 
 if __name__ == "__main__":
