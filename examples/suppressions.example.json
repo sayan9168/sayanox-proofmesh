@@ -1,0 +1,13 @@
+{
+  "suppressions": [
+    {
+      "id": "sup-example-1",
+      "rule_id": "risky.eval",
+      "path": "tests/**",
+      "justification": "eval used only in unit tests with trusted fixtures",
+      "created_by": "example@local",
+      "created_at": "2026-10-20T00:00:00+00:00",
+      "expires_at": null
+    }
+  ]
+}

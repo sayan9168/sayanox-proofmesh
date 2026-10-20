@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] — 2026-10-20
+
+### Added
+
+- Companion PWA (`web/companion/`) for offline evidence browsing
+- OSV vulnerability lookup (`proofmesh verify --with-osv`)
+- Optional Gitleaks / Semgrep wrappers
+- Suppression rules with mandatory justification
+- `proofmesh schema validate` and SARIF export
+- Example suppressions under `examples/`
+
 ## [0.1.0] — 2026-10-20
 
 ### Added
