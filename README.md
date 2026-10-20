@@ -9,6 +9,9 @@ No cloud account. No paid API. No mandatory AI model. Works offline.
 [![CI](https://github.com/sayan9168/sayanox-proofmesh/actions/workflows/ci.yml/badge.svg)](https://github.com/sayan9168/sayanox-proofmesh/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.2.0-green.svg)](CHANGELOG.md)
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
+[![Local-first](https://img.shields.io/badge/local--first-yes-brightgreen.svg)](#why-proofmesh)
+[![PyPI](https://img.shields.io/badge/PyPI-coming%20soon-lightgrey.svg)](docs/publishing.md)
 
 ## Why ProofMesh?
 
@@ -68,7 +71,7 @@ cd web/companion && python -m http.server 8080
 
 ## Docs
 
-[architecture](docs/architecture.md) · [threat model](docs/threat-model.md) · [limitations](docs/limitations.md) · [roadmap](docs/roadmap.md)
+[architecture](docs/architecture.md) · [threat model](docs/threat-model.md) · [limitations](docs/limitations.md) · [roadmap](docs/roadmap.md) · [publishing](docs/publishing.md)
 
 ## License
 
